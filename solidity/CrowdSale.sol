@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity ^0.8.20;
 
-import "./SimpleCoin.sol";
+import "./simpleCoin 2.sol";
 
 contract SimpleCrowdSale {
-    uint256 public startTime;
-    uint256 public endTime;
-    uint256 public weiTokenPrice;
-    uint256 public weiInvestmentObjective;
-    mapping(address => uint256) public investmentAmountOf;
-    uint256 public investmentReceived;
-    uint256 public investmentRefunded;
-    bool public isFinalized;
-    bool public isRefundedAllowed;
-    address public owner;
-    SimpleCoin public crowdSaleToken;
+    uint256 public startTime; // Tiempo de inicio
+    uint256 public endTime; // Tiempo de finalización
+    uint256 public weiTokenPrice; // Precio del token en Wei
+    uint256 public weiInvestmentObjective; // Objetivo de inversión en Wei
+    mapping(address => uint256) public investmentAmountOf; // Inversiones de cada dirección
+    uint256 public investmentReceived; // Total de inversión recibida
+    uint256 public investmentRefunded; // Total de inversión reembolsada
+    bool public isFinalized; // Si la venta se ha finalizado
+    bool public isRefundedAllowed; // Si los reembolsos están permitidos
+    address public owner; // Dueño del contrato
+    simpleCoin public crowdSaleToken; // Token para la venta
 
     modifier onlyOwner() {
-        if (msg.sender != owner) revert();
+        require(msg.sender == owner, "Not owner");
         _;
     }
 
@@ -27,15 +27,16 @@ contract SimpleCrowdSale {
         uint256 _weiTokenPrice,
         uint256 _etherInvestmentObjective
     ) {
-        require(_startTime >= block.timestamp);
-        require(_endTime >= _startTime);
-        require(_weiTokenPrice != 0);
-        require(_etherInvestmentObjective != 0);
+        require(_startTime >= block.timestamp, "Start time is in the past");
+        require(_endTime >= _startTime, "End time is before start time");
+        require(_weiTokenPrice != 0, "Token price is zero");
+        require(_etherInvestmentObjective != 0, "Investment objective is zero");
+
         startTime = _startTime;
         endTime = _endTime;
         weiTokenPrice = _weiTokenPrice;
-        weiInvestmentObjective = _etherInvestmentObjective * 1e18;
-        crowdSaleToken = new SimpleCoin(0);
+        weiInvestmentObjective = _etherInvestmentObjective * 1 ether;
+        crowdSaleToken = new simpleCoin(0);
         isFinalized = false;
         isRefundedAllowed = false;
         owner = msg.sender;
@@ -50,36 +51,43 @@ contract SimpleCrowdSale {
         return nonZeroInvestment && withinCrowdSalePeriod;
     }
 
-    function calculateNumberOfTokens(
+    function calcularNumberOfTokens(
         uint256 _investment
-    ) internal returns (uint256) {
+    ) internal view returns (uint256) {
         return _investment / weiTokenPrice;
     }
 
     function assignTokens(address _beneficiary, uint256 _investment) internal {
-        uint256 _numberOfTokens = calculateNumberOfTokens(_investment);
-        crowdSaleToken.mint(_beneficiary, _numberOfTokens);
+        uint256 numberOfTokens = calcularNumberOfTokens(_investment);
+        crowdSaleToken.mint(_beneficiary, numberOfTokens);
+        emit LogTokenAssignment(_beneficiary, numberOfTokens);
     }
 
     event LogInvestment(address indexed investor, uint256 value);
     event LogTokenAssignment(address indexed investor, uint256 numTokens);
 
     function invest() public payable {
-        require(isValidInvestment(msg.value));
+        require(isValidInvestment(msg.value), "Invalid investment");
         address investor = msg.sender;
         uint256 investment = msg.value;
+
+        investmentAmountOf[investor] += investment;
         investmentReceived += investment;
+
         assignTokens(investor, investment);
+
         emit LogInvestment(investor, investment);
     }
 
     function finalize() public onlyOwner {
-        if (isFinalized) revert();
+        require(!isFinalized, "Already finalized");
+
         bool isCrowdSaleComplete = block.timestamp > endTime;
-        bool investmentObjective = investmentReceived >= weiInvestmentObjective;
+        bool investmentObjectiveMet = investmentReceived >=
+            weiInvestmentObjective;
 
         if (isCrowdSaleComplete) {
-            if (investmentObjective) {
+            if (investmentObjectiveMet) {
                 crowdSaleToken.release();
             } else {
                 isRefundedAllowed = true;
@@ -88,23 +96,28 @@ contract SimpleCrowdSale {
         }
     }
 
-    event Refund(address investor, uint256 value);
+    event Refund(address indexed investor, uint256 value);
 
     function refund() public {
-        if (!isRefundedAllowed) revert();
+        require(isRefundedAllowed, "Refunds not allowed");
+
         address payable investor = payable(msg.sender);
         uint256 investment = investmentAmountOf[investor];
-        if (investment == 0) revert();
+
+        require(investment != 0, "No investment to refund");
+
         investmentAmountOf[investor] = 0;
         investmentRefunded += investment;
-        emit Refund(msg.sender, investment);
-        if (!investor.send(investment)) revert();
+
+        emit Refund(investor, investment);
+
+        require(investor.send(investment), "Refund failed");
     }
 }
 
 // pragma solidity ^0.8.20;
 
-// import './SimpleCoin.sol';
+// import "./simpleCoin 2.sol";
 
 // contract SimpleCrowdSale {
 //     uint256 public startTime; //Fecha de inicio del contrato
@@ -118,18 +131,17 @@ contract SimpleCrowdSale {
 //     bool public isRefundedAllowed;
 //     address public owner; //Dueño
 //     SimpleCoin public crowdSaleToken; //Token que se venderia
-// }
 
-// modifier onlyOwner(){
+//   modifier onlyOwner(){
 //     if(msg.sender != owner) revert();
 //     _;
 // }
 
 // constructor(
-//     uint256 public _startTime;
-//     uint256 public _endTime;
-//     uint256 public _weiTokenPrice;
-//     uint256 public _etherInvestmentObjective; //
+//     uint256  _startTime,
+//     uint256  _endTime,
+//     uint256 _weiTokenPrice,
+//     uint256 _etherInvestmentObjective//
 // ) public {
 //     require(_startTime >= block.timestamp);
 //     require(_endTime >= _startTime);
@@ -142,12 +154,13 @@ contract SimpleCrowdSale {
 //     crowdSaleToken = new SimpleCoin(0);
 //     isFinalized = false;
 //     isRefundedAllowed = false;
-//     owner = msg.sender
+//     owner = msg.sender;
+//  }
 // }
 // //Solo se puede usar dentro de la blockchain con la palabra reservada internal
-// function isValidInvestment(uint256 _investment) internal view return(bool){
+// function isValidInvestment(uint256 _investment) internal view returns(bool){
 //     bool nonZeroInvestment = _investment != 0;
-//     bool withinCrowdSalePeriod = bloc,timestamp >= startTime && block.timestamp <= endTime;
+//     bool withinCrowdSalePeriod = bloc.timestamp >= startTime && block.timestamp <= endTime;
 //     return nonZeroInvestment && withinCrowdSalePeriod;
 // }
 // //Funcion que calcula el numero de tokens existentes
@@ -155,7 +168,7 @@ contract SimpleCrowdSale {
 //     return _investment / weiTokenPrice;
 // }
 // //Funcion encargada de asignar la cantidad de tokens a la cuenta
-// function assignTokens(address _beneficiary, uint256 _investment)internal{
+// function assignTokens(uint256 _investment)internal{
 //     uint256 _numberOfTokens = CalculateNumberOfTokens(_investment);
 //     crowdSaleToken.mint(_beneficiary, _numberOfTokens);
 // }
@@ -185,18 +198,17 @@ contract SimpleCrowdSale {
 //         }
 //         isFinalized = true;
 //     }
-// }
 
-// event Refound(address investor, uint256 value):
-
-// function refund() public {
-//     if(!isRefundedAllowed) revert();
-//     address payable investor = payable(msg.sender);
-//     uint256 investment = investmentAmountOf[investor];
-//     if(investment == 0) revert(){
-//         investmentAmountOf[investor] = 0;
+//     event Refund(address investor,uint256 value);
+//     function refund() public{
+//         if(!isRefundedAllowed)revert();
+//         address payable investor = payable(msg.sender);
+//         uint256 investment = InvestmentAmountOf[investor];
+//         if(investment!=0)revert();
+//         InvestmentAmountOf[investor] = 0;
 //         investmentRefunded += investment;
-//         emit Refound(msg.sender,investment);
-//         if(!investor.send(investment)) revert();
+//         emit Refund(msg.sender,investment);
+//         if(!investor.send(investment))revert();
 //     }
+
 // }
